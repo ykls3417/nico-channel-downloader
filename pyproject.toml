@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nico-channel-downloader"
+version = "0.1.0"
+description = "Nico Channel Plus downloads with optional FFmpeg conversion and metadata cleanup"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = ["yt-dlp>=2026.3.17"]
+
+[project.scripts]
+nico-dl = "nico_dl:main"
+
+[tool.setuptools]
+py-modules = ["nico_dl"]
