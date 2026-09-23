@@ -88,7 +88,7 @@ class RouteTests(unittest.TestCase):
         for url in ROUTES:
             for flags in cases:
                 with self.subTest(url=url, flags=flags), tempfile.TemporaryDirectory() as directory:
-                    root = Path(directory)
+                    root = Path(directory).resolve()
                     source = root / 'item' / 'source.mp4'
                     args = nico_dl.parser().parse_args([url, *flags])
                     def capture(command, stage, **kwargs):
@@ -110,7 +110,7 @@ class RouteTests(unittest.TestCase):
 
     def test_every_route_processes_all_items_with_every_crf_and_mode(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             sources = [root / 'one/source.mp4', root / 'two/source.mp4']
             for url in ROUTES:
                 for flags in ([], ['--clean'], *[['--reencode', '--crf', str(crf)] for crf in range(52)]):
@@ -127,7 +127,7 @@ class RouteTests(unittest.TestCase):
 
     def test_manifest_batches_deduplicate_and_reject_escaping_paths(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             sources = [root / 'one/source.mp4', root / 'two/source.mp4']
             args = nico_dl.parser().parse_args([next(iter(ROUTES))])
             for paths, valid in ((sources + sources, True), ([], False), ([root.parent / 'escape.mp4'], False)):
