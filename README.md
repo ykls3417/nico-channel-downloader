@@ -140,6 +140,30 @@ characters. Linux also tests Python 3.10, 3.12 and 3.13. Check the repository's 
 results for actual platform verification; a configured matrix is not a passing run.
 CI does not test account login or access to your browser's encrypted cookie store.
 
+### Parameter coverage
+
+`tests/test_parameters.py` adds the following checks to the original media tests:
+
+| Parameter | Automated verification |
+| --- | --- |
+| URL | Invalid inputs, signed query preservation, real local HLS downloads |
+| `-h`, `--help` | Successful exit, all options listed, no download |
+| `--output-dir` | Default home directory, absolute/relative/tilde paths, spaces, Japanese characters, existing-file error |
+| `--quality` | All four choices, actual 480/720/1080/1440-height HLS variants, invalid choice |
+| `--cookies` | Real cookie-protected local download, missing/directory/malformed files, authentication-option conflict |
+| `--cookies-from-browser` | All six browser names forwarded and accepted by yt-dlp; real extraction from an isolated synthetic Firefox database; simulated extraction errors |
+| `--referer` | Header verified on playlists and segments; server denies access when omitted; invalid URL |
+| `--user-agent` | Header verified on playlists and segments; server denies access when omitted |
+| `--clean` | Real remux, metadata/chapter removal, original preservation, conflicting mode |
+| `--reencode` | Real H.264/AAC conversion, full decode validation, original preservation, conflicting mode |
+| `--crf` | All integers 0–51 parsed, forwarded and encoded by FFmpeg; CLI boundary values; invalid/out-of-range values |
+
+All value-taking options are tested for missing arguments. CRF only affects
+`--reencode`; it has no effect on a plain download or `--clean`.
+The synthetic Firefox test never reads your personal browser profile. Real Nico
+account access and Chromium/Safari OS-protected cookie extraction remain outside
+automated coverage; no live-account compatibility claim is implied by passing CI.
+
 For site extraction fixes, update yt-dlp with `python -m pip install -U yt-dlp`.
 Please include Python, yt-dlp and FFmpeg versions with bug reports, and remove
 credentials and signed URL query parameters from logs.
