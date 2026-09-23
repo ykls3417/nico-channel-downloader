@@ -1,4 +1,4 @@
-"""Download one Nico Channel Plus video and optionally process it with FFmpeg."""
+"""Download Niconico videos or collections and optionally process them with FFmpeg."""
 
 import argparse
 import json
@@ -8,35 +8,23 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from urllib.parse import urlsplit
+from nico_urls import default_referer, http_url, page_url
 
 
 class DownloadError(Exception):
     """An expected download or media-processing failure."""
 
 
-def http_url(value: str) -> str:
-    try:
-        parts = urlsplit(value)
-        valid = parts.scheme in {"http", "https"} and parts.hostname
-        valid = valid and not (parts.username or parts.password)
-    except ValueError:
-        valid = False
-    if not valid or any(character.isspace() for character in value):
-        raise argparse.ArgumentTypeError("Use an HTTP(S) URL without embedded credentials.")
-    return value
-
-
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("url", type=http_url, help="Video-page URL or direct m3u8 URL")
+    result.add_argument("url", type=page_url, help="Niconico video, live, or collection page URL")
     result.add_argument("--output-dir", type=Path, default=Path.home() / "Downloads" / "nico")
     result.add_argument("--quality", choices=["1080", "720", "480", "best"], default="1080",
                         help="Maximum advertised height; default: 1080 (no upscaling)")
     auth = result.add_mutually_exclusive_group()
     auth.add_argument("--cookies", type=Path, help="Netscape-format cookies file")
     auth.add_argument("--cookies-from-browser", choices=["brave", "chrome", "chromium", "edge", "firefox", "safari"])
-    result.add_argument("--referer", type=http_url, default="https://nicochannel.jp/")
+    result.add_argument("--referer", type=http_url, help="Niconico Referer override (default: selected service)")
     result.add_argument("--user-agent", help="Optional User-Agent matching your browser session")
     mode = result.add_mutually_exclusive_group()
     mode.add_argument("--clean", action="store_true", help="Remux into MKV, dropping copied metadata and chapters")
@@ -69,16 +57,16 @@ def inspect_media(path: Path) -> dict:
     return info
 
 
-def download(args: argparse.Namespace, folder: Path) -> Path:
+def download(args: argparse.Namespace, folder: Path) -> list[Path]:
     manifest = folder / "download-path.json"
     selection = "bv*+ba/b"
     if args.quality != "best":
         selection = f"bv*[height<=?{args.quality}]+ba/b[height<=?{args.quality}]"
-    command = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-playlist",
+    command = [sys.executable, "-m", "nico_backend", "--ignore-config", "--yes-playlist", "--abort-on-error",
                "--abort-on-unavailable-fragments", "--retries", "5", "--fragment-retries", "5",
-               "--socket-timeout", "30", "--no-overwrites", "--referer", args.referer,
+               "--socket-timeout", "30", "--no-overwrites", "--referer", args.referer or default_referer(args.url),
                "--format", selection, "--merge-output-format", "mkv",
-               "--output", str(folder / "source.%(ext)s"),
+               "--output", str(folder / "%(extractor_key)s-%(id)s" / "source.%(ext)s"),
                "--print-to-file", "after_move:%(filepath)j", str(manifest)]
     if args.cookies:
         command.extend(["--cookies", str(args.cookies.expanduser().resolve())])
@@ -89,16 +77,17 @@ def download(args: argparse.Namespace, folder: Path) -> Path:
     run([*command, "--", args.url], "Download")
     try:
         paths = manifest.read_text(encoding="utf-8").splitlines()
-        if len(paths) != 1:
-            raise ValueError("Expected a single video")
-        source = Path(json.loads(paths[0])).resolve()
-        if source.parent != folder.resolve():
+        if not paths:
+            raise ValueError("Empty collection")
+        sources = list(dict.fromkeys(Path(json.loads(line)).resolve() for line in paths))
+        if any(source.parent.parent != folder.resolve() for source in sources):
             raise ValueError("Unexpected output location")
     except (OSError, ValueError, TypeError) as error:
-        raise DownloadError("Download did not produce one valid output path.") from error
-    inspect_media(source)
+        raise DownloadError("Download did not produce valid output paths.") from error
+    for source in sources:
+        inspect_media(source)
     manifest.unlink()
-    return source
+    return sources
 
 
 def process_media(source: Path, *, reencode: bool, crf: int = 18) -> Path:
@@ -144,13 +133,14 @@ def main(argv: list[str] | None = None) -> int:
         root.mkdir(parents=True, exist_ok=True)
         folder = Path(tempfile.mkdtemp(prefix="nico-", dir=root))
         print(f"Download folder: {folder}", flush=True)
-        source = download(args, folder)
-        output = source
-        if args.clean or args.reencode:
-            print("Processing media. Metadata cleanup does not guarantee anonymity.", flush=True)
-            output = process_media(source, reencode=args.reencode, crf=args.crf)
-            print(f"Original preserved: {source}")
-        print(f"Saved: {output}")
+        sources = download(args, folder)
+        for source in sources:
+            output = source
+            if args.clean or args.reencode:
+                print("Processing media. Metadata cleanup does not guarantee anonymity.", flush=True)
+                output = process_media(source, reencode=args.reencode, crf=args.crf)
+                print(f"Original preserved: {source}")
+            print(f"Saved: {output}")
         return 0
     except (DownloadError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)

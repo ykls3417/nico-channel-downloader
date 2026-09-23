@@ -1,6 +1,6 @@
 # Nico Channel Downloader
 
-A small Python CLI for downloading individual Nico Channel Plus videos through
+A small Python CLI for downloading Niconico videos, live streams and collections through
 [yt-dlp](https://github.com/yt-dlp/yt-dlp), with optional FFmpeg metadata cleanup
 and H.264/AAC re-encoding. MIT licensed. This is an independent project.
 
@@ -44,7 +44,7 @@ on each machine instead of copying `.venv` across operating systems.
 
 ### Browser independence
 
-No browser is required for a direct URL that works without cookies. When authentication
+No browser is required for a public video that works without cookies. When authentication
 is needed, choose the browser you actually use on that machine:
 
 ```bash
@@ -64,7 +64,7 @@ Do not put cookies in the public repository.
 
 ## Use
 
-Replace the example URL with an individual video page or a current `.m3u8` URL:
+Replace the example URL with a supported Niconico page:
 
 ```bash
 # Download without re-encoding (default: up to advertised 1080p).
@@ -74,34 +74,80 @@ nico-dl 'https://nicochannel.jp/CHANNEL/video/VIDEO_ID'
 nico-dl 'https://nicochannel.jp/CHANNEL/video/VIDEO_ID' --cookies-from-browser brave
 
 # Remove copied metadata and chapters without re-encoding; output is MKV.
-nico-dl 'https://example.com/video.m3u8' --clean
+nico-dl 'https://www.nicovideo.jp/watch/sm9' --clean
 
 # Re-encode to H.264/AAC MP4, also removing copied metadata and chapters.
-nico-dl 'https://example.com/video.m3u8' --reencode --crf 18
+nico-dl 'https://www.nicovideo.jp/watch/sm9' --reencode --crf 18
 
 # Choose another quality cap and download location.
-nico-dl 'https://example.com/video.m3u8' --quality 720 --output-dir ./downloads
+nico-dl 'https://www.nicovideo.jp/watch/sm9' --quality 720 --output-dir ./downloads
 ```
 
 `--cookies PATH` accepts a Netscape-format cookies file instead of browser cookies.
-`--referer` defaults to `https://nicochannel.jp/`; `--user-agent` allows a session-specific
-override. Headers do not replace authentication. Expired signed URLs need to be
-obtained again from your authorized session. Support for video-page login depends
+`--referer` automatically selects the Niconico Video, Live, or Channel Plus origin;
+an explicit override must also use an allowed Niconico host. `--user-agent` allows
+a session-specific override. Headers do not replace authentication. Support for video-page login depends
 on the installed yt-dlp extractor; cookies alone may not satisfy every login flow.
 
 Each run creates a unique `nico-*` directory inside `~/Downloads/nico` by default.
-The downloaded `source.*` is always retained, including after successful processing.
+Each video gets an `EXTRACTOR-ID` subdirectory, preventing collection items from
+overwriting each other. The downloaded `source.*` is always retained, including
+after successful processing.
 Processed files are named `cleaned.mkv` or `reencoded.mp4`. Conversion writes to a
 partial file first, checks duration and audio stream count, and decodes the full
 result before promoting it to its final name. This extra decode pass takes time.
 Failures and interruptions preserve files and return a nonzero exit status.
+Collections stop on the first download error. Cleanup/re-encoding starts only after
+the whole download succeeds; earlier source files remain available if a later item fails.
 There is no automatic cross-run resume yet.
 
 The quality setting caps **advertised** resolution, allows unknown heights, and
-never upscales. A direct media playlist may lack resolution metadata; the cap cannot
-be guaranteed in that case. `--quality best` removes the cap. Channel lists, batches,
-and live recording are outside this initial version's scope. Processing keeps the
+never upscales. Some extracted formats lack resolution metadata, so the cap cannot be guaranteed
+in that case. `--quality best` removes the cap. Processing keeps the
 first video and all audio tracks; subtitles, attachments and data tracks are omitted.
+
+## Supported URLs and domain restriction
+
+Only the following input hosts are accepted: `nicovideo.jp`, `www.nicovideo.jp`,
+`sp.nicovideo.jp`, `embed.nicovideo.jp`, `ch.nicovideo.jp`, `live.nicovideo.jp`,
+`live2.nicovideo.jp`, `sp.live.nicovideo.jp`, `sp.live2.nicovideo.jp`, and `nicochannel.jp`.
+Other sites, lookalike domains, arbitrary subdomains, embedded credentials, custom
+ports, direct media URLs, and unsupported page paths are rejected before downloading.
+Mobile/embed video URLs are normalized to the main site. `nico.ms` short links and
+custom Channel Plus domains are not accepted; use the full listed-domain URL.
+
+| Type | Example shape |
+| --- | --- |
+| Regular / older / traditional channel video | `https://www.nicovideo.jp/watch/sm123` (`nm123`, `so123`, numeric IDs also accepted) |
+| Shorts | `https://www.nicovideo.jp/shorts/sm123` |
+| Niconico Live | `https://live.nicovideo.jp/watch/lv123` (also `/gate/lv123`) |
+| Channel Plus video / live | `https://nicochannel.jp/CHANNEL/video/smCODE` or `/live/smCODE` |
+| Mylist | `https://www.nicovideo.jp/mylist/123` |
+| Series | `https://www.nicovideo.jp/series/123` |
+| User uploads | `https://www.nicovideo.jp/user/123/video` (user root also accepted) |
+| Traditional channel collection | `https://ch.nicovideo.jp/CHANNEL/video` (channel root also accepted) |
+| Channel Plus collections | `https://nicochannel.jp/CHANNEL/videos` or `/lives` |
+
+All existing parameters apply to every supported route: output directory, quality,
+cookies or browser cookies, Referer, User-Agent, cleanup, re-encoding and CRF.
+CRF affects re-encoding only. Collections download all visible entries, including
+subsequent pages; URL query filters are passed to the service extractor. Traditional
+channel listings warn when account content settings hide entries. Channel Plus
+`/lives` lists archived broadcasts, following yt-dlp's extractor behavior.
+
+Live downloads run until the stream ends or you interrupt them. Conversion requires
+a completed, finite recording and runs afterward. Interruption returns a nonzero
+status and preserves whatever files the downloader has written; it does not guarantee
+a playable partial recording. There is no full-broadcast rewind guarantee. Upcoming,
+expired, unavailable, or inaccessible broadcasts can fail. Niconico Live timeshift
+availability depends on yt-dlp and the account's playback access; it is not verified
+by the offline tests. Channel Plus archives use the same video/live routes when the
+service exposes an archive. Deleted videos and unavailable older IDs also fail.
+
+Only Niconico extractors are registered, with no generic-site fallback, and nested
+playlist/extractor URLs are validated too. This is an **input-page restriction**,
+not a network firewall: Niconico's APIs, media CDNs and stream keys can use other
+hosts, and those requests are required for playback.
 
 ## What “clean” means
 
@@ -131,8 +177,9 @@ python -m unittest discover -s tests -v
 The tests generate tiny media fixtures and serve HLS on localhost; they do not use
 a Nico account. They exercise actual downloading, metadata cleanup, re-encoding,
 failure preservation, and refusal to overwrite existing output. FFmpeg/ffprobe are
-required; integration tests skip when these tools are unavailable. Live Nico Channel
-authentication and downloads still need verification with a real authorized URL.
+required; integration tests skip when these tools are unavailable. Live account authentication and recording still need verification with a real
+authorized URL. Local fixture adapters exist only under `tests/`; the installed CLI
+has no localhost or unrestricted-domain switch.
 
 CI runs the same media integration tests on Linux, Windows and macOS, and fails
 early if FFmpeg tools are missing. Fixtures use paths containing spaces and Japanese
@@ -146,7 +193,7 @@ CI does not test account login or access to your browser's encrypted cookie stor
 
 | Parameter | Automated verification |
 | --- | --- |
-| URL | Invalid inputs, signed query preservation, real local HLS downloads |
+| URL | Exact host/path validation, lookalike rejection, query preservation, real local HLS downloads through test-only adapters |
 | `-h`, `--help` | Successful exit, all options listed, no download |
 | `--output-dir` | Default home directory, absolute/relative/tilde paths, spaces, Japanese characters, existing-file error |
 | `--quality` | All four choices, actual 480/720/1080/1440-height HLS variants, invalid choice |
@@ -157,6 +204,11 @@ CI does not test account login or access to your browser's encrypted cookie stor
 | `--clean` | Real remux, metadata/chapter removal, original preservation, conflicting mode |
 | `--reencode` | Real H.264/AAC conversion, full decode validation, original preservation, conflicting mode |
 | `--crf` | All integers 0–51 parsed, forwarded and encoded by FFmpeg; CLI boundary values; invalid/out-of-range values |
+
+`tests/test_routes.py` covers 19 URL forms, real extractor selection, every shared
+parameter across those routes, collection pagination/deduplication, multiple output
+files, and rejection of external extractor redirects. Service parameter tests use
+fixtures/mocks; they do not prove that each live service currently grants access.
 
 All value-taking options are tested for missing arguments. CRF only affects
 `--reencode`; it has no effect on a plain download or `--clean`.
