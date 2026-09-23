@@ -1,15 +1,21 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nico-channel-downloader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Niconico video and collection downloads with optional FFmpeg conversion and metadata cleanup"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["yt-dlp[default]>=2026.8.19"]
+
+[project.urls]
+Homepage = "https://github.com/ykls3417/nico-channel-downloader"
+Issues = "https://github.com/ykls3417/nico-channel-downloader/issues"
+Releases = "https://github.com/ykls3417/nico-channel-downloader/releases"
 
 [project.scripts]
 nico-dl = "nico_dl:main"
