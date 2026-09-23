@@ -20,7 +20,7 @@ class URLTests(unittest.TestCase):
                 nico_dl.http_url(url)
 
     def test_signed_url_is_preserved(self):
-        url = "https://example.com/video.m3u8?token=a%2Bb&expires=123"
+        url = "https://www.nicovideo.jp/watch/sm9?token=a%2Bb&expires=123"
         self.assertEqual(nico_dl.http_url(url), url)
 
 
@@ -107,13 +107,13 @@ class MediaTests(unittest.TestCase):
             for flags, expected in (([], "source.*"), (["--clean"], "cleaned.mkv"), (["--reencode"], "reencoded.mp4")):
                 with self.subTest(flags=flags):
                     output = self.root / ("out" + expected.replace("*", "all"))
-                    result = subprocess.run([sys.executable, "-m", "nico_dl", url, "--output-dir", str(output),
+                    result = subprocess.run([sys.executable, str(Path(__file__).with_name("local_cli.py").resolve()), url, "--output-dir", str(output),
                                              *flags], capture_output=True, encoding="utf-8", errors="replace")
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    self.assertEqual(len(list(output.glob(f"nico-*/{expected}"))), 1)
-                    self.assertEqual(len(list(output.glob("nico-*/source.*"))), 1)
+                    self.assertEqual(len(list(output.glob(f"nico-*/*/{expected}"))), 1)
+                    self.assertEqual(len(list(output.glob("nico-*/*/source.*"))), 1)
             bad_output = self.root / "failed"
-            result = subprocess.run([sys.executable, "-m", "nico_dl", url.replace("video.m3u8", "missing.m3u8"),
+            result = subprocess.run([sys.executable, str(Path(__file__).with_name("local_cli.py").resolve()), url.replace("video.m3u8", "missing.m3u8"),
                                      "--output-dir", str(bad_output)], capture_output=True, encoding="utf-8", errors="replace")
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(list(bad_output.rglob("reencoded.mp4")))

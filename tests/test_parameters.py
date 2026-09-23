@@ -22,7 +22,7 @@ import nico_dl
 import yt_dlp
 
 
-URL = 'https://example.com/video.m3u8?token=synthetic%2Bvalue&expires=123'
+URL = 'https://www.nicovideo.jp/watch/sm9?token=synthetic%2Bvalue&expires=123'
 BROWSERS = ('brave', 'chrome', 'chromium', 'edge', 'firefox', 'safari')
 
 
@@ -33,7 +33,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.output_dir, Path.home() / 'Downloads' / 'nico')
         self.assertEqual(args.quality, '1080')
         self.assertEqual(args.crf, 18)
-        self.assertEqual(args.referer, 'https://nicochannel.jp/')
+        self.assertIsNone(args.referer)
         self.assertIsNone(args.cookies)
         self.assertIsNone(args.cookies_from_browser)
         self.assertIsNone(args.user_agent)
@@ -91,7 +91,7 @@ class ForwardingTests(unittest.TestCase):
         for browser in BROWSERS:
             with self.subTest(browser=browser), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
-                source = root / 'source.mp4'
+                source = root / 'Niconico-sm9' / 'source.mp4'
                 args = nico_dl.parser().parse_args([URL, '--cookies-from-browser', browser])
                 def fake_download(command, stage, **kwargs):
                     self.assertEqual(command[command.index('--cookies-from-browser') + 1], browser)
@@ -100,7 +100,7 @@ class ForwardingTests(unittest.TestCase):
                     (root / 'download-path.json').write_text(json.dumps(str(source)) + '\n', encoding='utf-8')
                     return ''
                 with patch('nico_dl.run', side_effect=fake_download), patch('nico_dl.inspect_media'):
-                    self.assertEqual(nico_dl.download(args, root), source.resolve())
+                    self.assertEqual(nico_dl.download(args, root), [source.resolve()])
                 with patch('nico_dl.run', side_effect=nico_dl.DownloadError('Browser unavailable')):
                     with self.assertRaisesRegex(nico_dl.DownloadError, 'Browser unavailable'):
                         nico_dl.download(args, root)
@@ -111,7 +111,7 @@ class ForwardingTests(unittest.TestCase):
             for crf in range(52):
                 with self.subTest(crf=crf), redirect_stdout(io.StringIO()), \
                      patch('nico_dl.shutil.which', return_value='tool'), \
-                     patch('nico_dl.download', return_value=root / 'source.mp4'), \
+                     patch('nico_dl.download', return_value=[root / 'source.mp4']), \
                      patch('nico_dl.process_media', return_value=root / 'reencoded.mp4') as process:
                     self.assertEqual(nico_dl.main([URL, '--output-dir', str(root), '--reencode', '--crf', str(crf)]), 0)
                     process.assert_called_once_with(root / 'source.mp4', reencode=True, crf=crf)
@@ -134,7 +134,7 @@ class ProtectedHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         self.server.requests.append((self.path, dict(self.headers)))
         if self.server.protected:
-            if (self.headers.get('Referer') != 'https://example.com/player' or
+            if (self.headers.get('Referer') != 'https://www.nicovideo.jp/player' or
                     self.headers.get('User-Agent') != 'Nico parameter test/1.0' or
                     'nico_test=allowed' not in self.headers.get('Cookie', '')):
                 self.send_error(403)
@@ -179,7 +179,7 @@ class ParameterIntegrationTests(unittest.TestCase):
 
     def cli(self, *flags, success=True, env=None):
         output = Path(tempfile.mkdtemp(dir=self.root, prefix='output '))
-        result = subprocess.run([sys.executable, '-m', 'nico_dl', self.url, '--output-dir', str(output), *flags],
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name('local_cli.py').resolve()), self.url, '--output-dir', str(output), *flags],
                                 capture_output=True, encoding='utf-8', errors='replace', timeout=90, env=env)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -200,10 +200,10 @@ class ParameterIntegrationTests(unittest.TestCase):
                                 (['--output-dir', '~/custom 日本語'], home / 'custom 日本語'),
                                 (['--output-dir', 'relative output'], home / 'relative output')):
             with self.subTest(flags=flags):
-                result = subprocess.run([sys.executable, '-m', 'nico_dl', self.url, '--quality', '480', *flags],
+                result = subprocess.run([sys.executable, str(Path(__file__).with_name('local_cli.py').resolve()), self.url, '--quality', '480', *flags],
                                         env=env, cwd=home, capture_output=True, encoding='utf-8', errors='replace', timeout=90)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual(len(list(expected.glob('nico-*/source.*'))), 1)
+                self.assertEqual(len(list(expected.glob('nico-*/*/source.*'))), 1)
 
     def test_firefox_extraction_with_synthetic_profile(self):
         home, env = self.isolated_home()
@@ -225,7 +225,7 @@ class ParameterIntegrationTests(unittest.TestCase):
         self.server.protected = True
         self.server.requests.clear()
         try:
-            self.cli('--cookies-from-browser', 'firefox', '--referer', 'https://example.com/player',
+            self.cli('--cookies-from-browser', 'firefox', '--referer', 'https://www.nicovideo.jp/player',
                      '--user-agent', 'Nico parameter test/1.0', '--quality', '480', env=env)
             self.assertTrue(any('.ts' in path for path, _ in self.server.requests))
             for _, headers in self.server.requests:
@@ -248,7 +248,7 @@ class ParameterIntegrationTests(unittest.TestCase):
         for quality, expected in (('480', 480), ('720', 720), ('1080', 1080), ('best', 1440)):
             with self.subTest(quality=quality):
                 output, _ = self.cli('--quality', quality)
-                files = list(output.glob('nico-*/source.*'))
+                files = list(output.glob('nico-*/*/source.*'))
                 self.assertEqual(len(files), 1)
                 info = nico_dl.inspect_media(files[0])
                 self.assertEqual(next(s['height'] for s in info['streams'] if s['codec_type'] == 'video'), expected)
@@ -259,7 +259,7 @@ class ParameterIntegrationTests(unittest.TestCase):
         cookies.write_text('# Netscape HTTP Cookie File\n127.0.0.1\tFALSE\t/\tFALSE\t0\tnico_test\tallowed\n', encoding='utf-8')
         self.server.protected = True
         self.server.requests.clear()
-        flags = ['--cookies', str(cookies), '--referer', 'https://example.com/player',
+        flags = ['--cookies', str(cookies), '--referer', 'https://www.nicovideo.jp/player',
                  '--user-agent', 'Nico parameter test/1.0', '--quality', '480']
         try:
             self.cli(*flags)
@@ -269,7 +269,7 @@ class ParameterIntegrationTests(unittest.TestCase):
             self.assertTrue(any('.ts' in path for path in paths))
             for path, headers in self.server.requests:
                 with self.subTest(path=path):
-                    self.assertEqual(headers.get('Referer'), 'https://example.com/player')
+                    self.assertEqual(headers.get('Referer'), 'https://www.nicovideo.jp/player')
                     self.assertEqual(headers.get('User-Agent'), 'Nico parameter test/1.0')
                     self.assertIn('nico_test=allowed', headers.get('Cookie', ''))
             # Independently prove each parameter is needed by the protected endpoint.
@@ -293,11 +293,11 @@ class ParameterIntegrationTests(unittest.TestCase):
                             (['--reencode', '--crf', '51'], 'reencoded.mp4')):
             with self.subTest(flags=flags):
                 output, _ = self.cli('--quality', '480', *flags)
-                files = list(output.glob(f'nico-*/{name}'))
+                files = list(output.glob(f'nico-*/*/{name}'))
                 self.assertEqual(len(files), 1)
                 info = nico_dl.inspect_media(files[0])
                 self.assertEqual([s['codec_name'] for s in info['streams']], ['h264', 'aac'])
-                self.assertEqual(len(list(output.glob('nico-*/source.*'))), 1)
+                self.assertEqual(len(list(output.glob('nico-*/*/source.*'))), 1)
                 self.assertFalse(list(output.rglob('*.partial.*')))
 
 
