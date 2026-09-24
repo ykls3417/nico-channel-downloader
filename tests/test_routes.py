@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 import nico_backend
 import nico_dl
+import yt_dlp
+from yt_dlp.downloader import get_suitable_downloader
+from yt_dlp.downloader.external import FFmpegFD
 from nico_urls import ALLOWED_HOSTS, default_referer, http_url, page_url
 from yt_dlp.utils import DownloadError
 
@@ -27,7 +30,8 @@ ROUTES = {
     'https://nicovideo.jp/watch/nm123': 'Niconico',
     'https://sp.nicovideo.jp/watch/so123': 'Niconico',
     'https://embed.nicovideo.jp/watch/123': 'Niconico',
-    'https://www.nicovideo.jp/shorts/sm123': 'Niconico',
+    'https://www.nicovideo.jp/shorts/ss46441082': 'Niconico',
+    'https://www.nicovideo.jp/watch/nl1872567': 'Niconico',
     'https://live.nicovideo.jp/watch/lv123': 'NiconicoLive',
     'https://sp.live2.nicovideo.jp/gate/lv123': 'NiconicoLive',
     'https://nicochannel.jp/testman/video/smABC123': 'NiconicoChannelPlus',
@@ -46,6 +50,25 @@ ROUTES = {
 
 
 class RouteTests(unittest.TestCase):
+    def test_niconico_live_downloads_video_and_audio_together_with_heartbeat(self):
+        info = {'extractor_key': 'NiconicoLive', 'protocol': 'niconico_live+niconico_live',
+                'requested_formats': [{'url': 'https://media.example/video.m3u8', 'protocol': 'niconico_live'},
+                                      {'url': 'https://media.example/audio.m3u8', 'protocol': 'niconico_live'}]}
+        with nico_backend.RestrictedDL({'quiet': True}) as downloader:
+            with patch.object(yt_dlp.YoutubeDL, 'process_info'):
+                downloader.process_info(info)
+            self.assertIs(get_suitable_downloader(info, downloader.params), FFmpegFD)
+            with patch('nico_backend.NiconicoLiveFD') as live:
+                live.return_value.download.return_value = (True, True)
+                self.assertEqual(downloader.dl('recording.mkv', info), (True, True))
+                live.return_value.download.assert_called_once()
+                self.assertEqual(len(live.return_value.download.call_args.args[1]['requested_formats']), 2)
+
+    def test_backend_reports_rejected_urls_instead_of_failing_silently(self):
+        with redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(nico_backend.main(['--ignore-config', 'https://example.com/video']), 1)
+        self.assertIn('allowed Niconico, YouTube, or Bilibili host', errors.getvalue())
+
     def test_new_urls_normalize_without_playlist_or_tracking_parameters(self):
         self.assertEqual(page_url('https://youtu.be/BaW_jenozKc?list=PL123&t=30'),
                          'https://www.youtube.com/watch?v=BaW_jenozKc')
