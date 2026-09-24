@@ -25,7 +25,7 @@
 直接從 GitHub 安裝指定版本的套件：
 
 ```sh
-pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.0/nico_channel_downloader-0.4.0-py3-none-any.whl
+pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.1/nico_channel_downloader-0.4.1-py3-none-any.whl
 nico-dl --help
 ```
 
@@ -70,8 +70,8 @@ nico-dl "YOUR_VIDEO_URL" --reencode --crf 18
 | YouTube 影片 | `https://www.youtube.com/watch?v=VIDEO_ID` 或 `https://youtu.be/VIDEO_ID` |
 | YouTube Shorts／直播 | `https://www.youtube.com/shorts/VIDEO_ID` 或 `/live/VIDEO_ID` |
 | Bilibili 影片 | `https://www.bilibili.com/video/BV...` 或 `/video/av123`；加上 `?p=2` 可指定分集 |
-| 一般／舊版／頻道影片 | `https://www.nicovideo.jp/watch/sm123`；也接受 `nm123`、`so123` 及純數字 ID |
-| Shorts | `https://www.nicovideo.jp/shorts/sm123` |
+| 一般／舊版／頻道影片 | `https://www.nicovideo.jp/watch/sm123`；也接受 `nm123`、`nl123`、`so123` 及純數字 ID |
+| Shorts | `https://www.nicovideo.jp/shorts/ss46441082` |
 | Niconico Live | `https://live.nicovideo.jp/watch/lv123`；也接受 `/gate/lv123` |
 | Channel Plus 影片／直播 | `https://nicochannel.jp/CHANNEL/video/smCODE` 或 `/live/smCODE` |
 | Mylist／系列 | `https://www.nicovideo.jp/mylist/123` 或 `/series/123` |
@@ -104,12 +104,15 @@ YouTube 網址一律只下載單一影片，並移除清單、追蹤及時間戳
 
 `--cookies` 與 `--cookies-from-browser` 只能擇一；`--clean` 與 `--reencode` 也只能擇一。
 
+實際網站測試與參數覆蓋範圍見 [TESTING.md（英文）](TESTING.md)。
+
 ## 檔案與使用限制
 
 - 每次執行建立 `nico-*/EXTRACTOR-ID/source.*`。處理後的 `cleaned.mkv` 或 `reencoded.mp4` 位於同一資料夾，原始檔不會被刪除。
 - 輸出前會檢查時長、音軌數量並完整解碼。保留第一條視訊軌及所有音軌，不保留字幕或附件。
 - 清單遇到第一個下載錯誤即停止；全部下載成功後才開始處理。後續項目失敗時，先前下載的原始檔仍會保留。目前不支援不同執行之間自動續傳。
 - YouTube 直播從目前播放位置開始錄製；不提供從頭錄製或等待預定直播的參數。可存取的回放以一般影片下載。
+- Niconico 直播會同時錄製影像與聲音，並保留網站所需的連線心跳。取消時會停止下載程序及其子程序。
 - 直播會錄製至結束或按下 Ctrl+C。完成錄製後才進行處理；中斷留下的部分檔案不保證可播放。時移／存檔是否可下載取決於網站、yt-dlp 及帳戶權限。
 - **清除中繼資料或重新編碼不保證匿名，也不保證去除鑑識浮水印。**編碼器可能新增技術標籤，重新編碼也可能降低畫質。
 - 僅下載你有權下載的內容。本工具不移除 DRM。請勿公開 Cookies、帶簽章的網址或未遮蔽敏感資料的日誌。
@@ -130,6 +133,8 @@ pipx uninstall nico-channel-downloader
 | --- | --- |
 | 找不到 `nico-dl` | 執行 `pipx ensurepath`，重新開啟終端機，再檢查 `pipx list`。 |
 | 找不到 FFmpeg／ffprobe | 安裝兩者並將所在資料夾加入 PATH。 |
+| Channel Plus API 網域無法解析 | 測試時上游 API 網域的 DNS 解析失敗；Cookies 無法修復此問題，請確認服務狀態及 yt-dlp 更新。 |
+| Bilibili 回傳 HTTP 412 | 網站拒絕請求。公開測試中，瀏覽器標頭及模擬瀏覽器連線均未解決；帳戶／IP 情況可能不同，重試並非已確認的修正方式。 |
 | YouTube 缺少 Deno | 安裝 Deno 2.3.0 以上版本並加入 PATH，再重新開啟終端機。 |
 | YouTube 要求登入或 PO token | 更新 yt-dlp；需要帳戶權限時才使用 Cookies。部分格式需要外部 [PO token 提供者](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)。本指令不設定提供者或接受 token，這些情況可能仍無法下載。 |
 | Bilibili 畫質低於設定 | 可用畫質取決於登入、會員、地區及影片；`--quality` 只是上限，不會解鎖格式。 |

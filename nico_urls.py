@@ -52,7 +52,7 @@ def page_url(value: str) -> str:
         return urlunsplit(('https', 'www.bilibili.com', path, urlencode({'p': part[0]}) if part else '', ''))
     if host in VIDEO_HOSTS:
         host = 'www.nicovideo.jp'
-        pattern = (r'/(?:watch|shorts)/(?:sm|nm|so)?\d+'
+        pattern = (r'/(?:watch|shorts)/(?:sm|nm|so|ss|nl)?\d+'
                    r'|/(?:user/\d+/)?(?:my/)?mylist/\d+'
                    r'|/(?:user/\d+/)?series/\d+|/user/\d+(?:/video)?')
     elif host in LIVE_HOSTS:

@@ -6,6 +6,7 @@ import sys
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 import yt_dlp
+from yt_dlp.downloader.niconico import NiconicoLiveFD
 from yt_dlp.extractor.bilibili import BiliBiliIE
 from yt_dlp.extractor.common import InfoExtractor
 from yt_dlp.extractor.niconico import (
@@ -96,7 +97,8 @@ class RestrictedDL(yt_dlp.YoutubeDL):
         try:
             url = page_url(url)
         except argparse.ArgumentTypeError as error:
-            raise DownloadError(str(error)) from error
+            self.report_error(str(error))
+            return None
         return super().extract_info(url, *args, **kwargs)
 
     def process_video_result(self, info_dict, download=True):
@@ -105,6 +107,21 @@ class RestrictedDL(yt_dlp.YoutubeDL):
             width, height = fmt.get('width'), fmt.get('height')
             fmt['short_edge'] = min(width, height) if width and height else None
         return super().process_video_result(info_dict, download=download)
+
+    def process_info(self, info_dict):
+        if info_dict.get('extractor_key') == 'NiconicoLive' and info_dict.get('requested_formats'):
+            # Let yt-dlp plan one simultaneous FFmpeg download, not sequential live tracks.
+            info_dict['protocol'] = '+'.join('m3u8' for _ in info_dict['requested_formats'])
+        return super().process_info(info_dict)
+
+    def dl(self, name, info, subtitle=False, test=False):
+        if info.get('extractor_key') == 'NiconicoLive' and info.get('requested_formats') and not subtitle and not test:
+            # Preserve yt-dlp's Niconico websocket heartbeat while FFmpeg merges the tracks.
+            downloader = NiconicoLiveFD(self, self.params)
+            for hook in self._progress_hooks:
+                downloader.add_progress_hook(hook)
+            return downloader.download(name, self._copy_infodict(info))
+        return super().dl(name, info, subtitle=subtitle, test=test)
 
 
 def main(argv=None):

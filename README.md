@@ -25,7 +25,7 @@ Reopen your terminal after setup. Check that `pipx --version`, `ffmpeg -version`
 Install the versioned wheel directly from GitHub:
 
 ```sh
-pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.0/nico_channel_downloader-0.4.0-py3-none-any.whl
+pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.1/nico_channel_downloader-0.4.1-py3-none-any.whl
 nico-dl --help
 ```
 
@@ -70,8 +70,8 @@ The IDs below illustrate URL shapes; replace them with real IDs.
 | YouTube video | `https://www.youtube.com/watch?v=VIDEO_ID` or `https://youtu.be/VIDEO_ID` |
 | YouTube Shorts / live | `https://www.youtube.com/shorts/VIDEO_ID` or `/live/VIDEO_ID` |
 | Bilibili video | `https://www.bilibili.com/video/BV...` or `/video/av123`; append `?p=2` for one part |
-| Regular / older / channel video | `https://www.nicovideo.jp/watch/sm123` — also `nm123`, `so123`, numeric IDs |
-| Shorts | `https://www.nicovideo.jp/shorts/sm123` |
+| Regular / older / channel video | `https://www.nicovideo.jp/watch/sm123` — also `nm123`, `nl123`, `so123`, numeric IDs |
+| Shorts | `https://www.nicovideo.jp/shorts/ss46441082` |
 | Niconico Live | `https://live.nicovideo.jp/watch/lv123` — also `/gate/lv123` |
 | Channel Plus video / live | `https://nicochannel.jp/CHANNEL/video/smCODE` or `/live/smCODE` |
 | Mylist / series | `https://www.nicovideo.jp/mylist/123` or `/series/123` |
@@ -104,12 +104,15 @@ All options apply to the supported URL types above.
 
 Choose either `--cookies` or `--cookies-from-browser`, and either `--clean` or `--reencode`.
 
+Real-site results and parameter coverage: [TESTING.md](TESTING.md).
+
 ## Your files and important limits
 
 - Each run creates `nico-*/EXTRACTOR-ID/source.*`. Processed files appear beside it as `cleaned.mkv` or `reencoded.mp4`. The source is never deleted.
 - Processing checks duration, audio track count, and full decoding before publishing the final output. It keeps the first video track and all audio tracks; subtitles and attachments are omitted.
 - A collection stops at the first download error. Processing starts after the whole download succeeds. Earlier source files remain if a later item fails. There is no automatic resume between runs.
 - YouTube live recording starts at the current point; rewind/from-start and waiting for scheduled streams are not exposed. Available replays download as recorded videos.
+- Niconico live video and audio are recorded together, with the service heartbeat retained. Cancellation stops the downloader and its child processes.
 - Live recording continues until the broadcast ends or you press Ctrl+C. Processing runs after a completed recording. Partial files may not be playable. Timeshift/archive access depends on the service, yt-dlp, and your account; it is not guaranteed.
 - **Metadata cleanup and re-encoding do not guarantee anonymity or remove forensic watermarks.** Encoders may add technical tags, and re-encoding can reduce quality.
 - Use content you have permission to download. This app does not remove DRM. Keep cookies and signed URLs private; redact logs before sharing them.
@@ -130,6 +133,8 @@ pipx uninstall nico-channel-downloader
 | --- | --- |
 | `nico-dl` is not found | Run `pipx ensurepath`, reopen the terminal, then check `pipx list`. |
 | FFmpeg / ffprobe is missing | Install both tools and add their folder to PATH. |
+| Channel Plus API cannot be resolved | Its upstream API hostname failed DNS checks during testing. Cookies cannot fix DNS failures; check service availability and yt-dlp updates. |
+| Bilibili returns HTTP 412 | The service rejected the request. Browser headers and impersonation did not resolve it in our public tests. Account/IP access may differ; repeated retries are not a confirmed fix. |
 | YouTube needs Deno | Install Deno 2.3.0+ on PATH and reopen the terminal. |
 | YouTube asks for sign-in or a PO token | Update yt-dlp; use cookies only when account access is needed. Some formats require an external [PO token provider](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide). This CLI does not configure providers or accept tokens; these cases may remain unavailable. |
 | Bilibili quality is lower than requested | Available formats depend on login, membership, region, and the video. `--quality` sets a ceiling; it does not unlock formats. |

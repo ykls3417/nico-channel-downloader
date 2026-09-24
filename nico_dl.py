@@ -3,8 +3,10 @@
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -36,12 +38,40 @@ def parser() -> argparse.ArgumentParser:
 
 
 def run(command: list[str], stage: str, *, capture: bool = False) -> str:
-    completed = subprocess.run(command, encoding="utf-8", errors="replace", stdout=subprocess.PIPE if capture else None,
-                               stderr=subprocess.PIPE if capture else None, check=False)
-    if completed.returncode:
+    # Isolate the whole downloader/FFmpeg tree so cancellation cannot leave it running.
+    windows = os.name == 'nt'
+    process = subprocess.Popen(command, encoding="utf-8", errors="replace",
+                               stdout=subprocess.PIPE if capture else None,
+                               stderr=subprocess.PIPE if capture else None,
+                               start_new_session=not windows,
+                               creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0)
+    try:
+        stdout, _ = process.communicate()
+    except KeyboardInterrupt:
+        if windows:
+            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGINT)
+            except ProcessLookupError:
+                pass
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        finally:
+            if not windows:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait()
+        raise
+    if process.returncode:
         # Do not include command arguments: they can contain signed URLs or cookies.
-        raise DownloadError(f"{stage} failed (exit {completed.returncode}). Original files are preserved.")
-    return completed.stdout or ""
+        raise DownloadError(f"{stage} failed (exit {process.returncode}). Original files are preserved.")
+    return stdout or ""
 
 
 def inspect_media(path: Path) -> dict:

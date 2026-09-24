@@ -24,9 +24,11 @@ python tests/check_package.py dist
 
 Start with an empty `dist` directory so there is exactly one wheel to test. `build` creates a source archive, then builds the wheel from that archive. The package check installs the wheel into a temporary pipx environment, verifies the installed modules and both CLI entry points, and runs the complete test suite outside the checkout. It does not change your existing pipx apps.
 
-CI builds once and tests that wheel on Windows/macOS with Python 3.12, and Linux with Python 3.10, 3.12 and 3.13. FFmpeg must be present; CI does not silently skip media tests. Local HLS fixtures test actual downloads, four quality choices, cookies/headers, metadata cleanup, all 52 CRF values, output validation and preservation on errors. URL tests cover 26 route examples across Niconico, YouTube and Bilibili, all shared parameters, host restrictions and collection handling. Quality tests use real yt-dlp selection for both portrait and landscape formats, including unknown dimensions. YouTube runtime checks fail before creating output when Deno is missing. Test-only local extractors are not included in the wheel.
+CI builds once and tests that wheel on Windows/macOS with Python 3.12, and Linux with Python 3.10, 3.12 and 3.13. FFmpeg must be present; CI does not silently skip media tests. Local HLS fixtures test actual downloads, four quality choices, cookies/headers, metadata cleanup, all 52 CRF values, output validation and preservation on errors. URL tests cover 27 route examples across Niconico, YouTube and Bilibili, all shared parameters, host restrictions and collection handling. Quality tests use real yt-dlp selection for both portrait and landscape formats, including unknown dimensions. YouTube runtime checks fail before creating output when Deno is missing. Test-only local extractors are not included in the wheel.
 
 These tests do not prove access to paid content, real browser encrypted cookie stores, live broadcasts, or timeshift playback. Public video extraction and traditional-channel pagination have also been checked manually without account credentials.
+
+See [TESTING.md](TESTING.md) for the real-video audit and its limits. Process-tree cancellation is exercised with real child and grandchild processes on each CI platform.
 
 ## Architecture
 

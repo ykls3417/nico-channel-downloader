@@ -25,7 +25,7 @@
 GitHub からバージョン指定のパッケージを直接インストールします。
 
 ```sh
-pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.0/nico_channel_downloader-0.4.0-py3-none-any.whl
+pipx install https://github.com/ykls3417/nico-channel-downloader/releases/download/v0.4.1/nico_channel_downloader-0.4.1-py3-none-any.whl
 nico-dl --help
 ```
 
@@ -70,8 +70,8 @@ nico-dl "YOUR_VIDEO_URL" --reencode --crf 18
 | YouTube 動画 | `https://www.youtube.com/watch?v=VIDEO_ID` または `https://youtu.be/VIDEO_ID` |
 | YouTube ショート／生配信 | `https://www.youtube.com/shorts/VIDEO_ID` または `/live/VIDEO_ID` |
 | Bilibili 動画 | `https://www.bilibili.com/video/BV...` または `/video/av123`。`?p=2` でパートを指定 |
-| 通常／旧形式／チャンネル動画 | `https://www.nicovideo.jp/watch/sm123` — `nm123`、`so123`、数字のみの ID にも対応 |
-| ショート | `https://www.nicovideo.jp/shorts/sm123` |
+| 通常／旧形式／チャンネル動画 | `https://www.nicovideo.jp/watch/sm123` — `nm123`、`nl123`、`so123`、数字のみの ID にも対応 |
+| ショート | `https://www.nicovideo.jp/shorts/ss46441082` |
 | ニコニコ生放送 | `https://live.nicovideo.jp/watch/lv123` — `/gate/lv123` にも対応 |
 | チャンネルプラスの動画／生放送 | `https://nicochannel.jp/CHANNEL/video/smCODE` または `/live/smCODE` |
 | マイリスト／シリーズ | `https://www.nicovideo.jp/mylist/123` または `/series/123` |
@@ -104,12 +104,15 @@ YouTube の URL は常に動画を 1 本だけ選び、再生リスト・追跡�
 
 `--cookies` と `--cookies-from-browser`、`--clean` と `--reencode` は、それぞれ同時に指定できません。
 
+実際のサイトでの結果とパラメーターの検証範囲は [TESTING.md（英語）](TESTING.md) を参照してください。
+
 ## 保存ファイルと制限
 
 - 実行ごとに `nico-*/EXTRACTOR-ID/source.*` を作成します。処理後の `cleaned.mkv` または `reencoded.mp4` は同じフォルダーに保存し、元のファイルは削除しません。
 - 出力の確定前に、長さ・音声トラック数・全体のデコードを検証します。最初の映像トラックとすべての音声トラックを残し、字幕や添付ファイルは含めません。
 - 一覧のダウンロードは最初のエラーで停止します。処理は全件のダウンロード成功後に始まります。途中で失敗しても、それまでの元ファイルは残ります。別の実行からの自動再開には未対応です。
 - YouTube の生配信は現在の位置から録画します。先頭からの録画や配信開始待ちのオプションはありません。利用可能なアーカイブは通常の動画として保存します。
+- ニコニコ生放送は映像と音声を同時に録画し、接続維持用の通信も継続します。キャンセル時にはダウンローダーと子プロセスを停止します。
 - 生放送は終了するか Ctrl+C を押すまで録画します。処理は録画完了後に行います。中断したファイルの再生は保証できません。タイムシフト／アーカイブの利用可否は、サイト・yt-dlp・アカウントの権限によります。
 - **メタデータの削除や再エンコードは、匿名性や識別用ウォーターマークの除去を保証しません。**エンコーダーが技術情報を追加する場合があり、再エンコードで画質が低下することもあります。
 - ダウンロードする権限があるコンテンツだけを利用してください。DRM の解除機能はありません。Cookie、署名付き URL、機密情報を含むログを公開しないでください。
@@ -130,6 +133,8 @@ pipx uninstall nico-channel-downloader
 | --- | --- |
 | `nico-dl` が見つからない | `pipx ensurepath` を実行し、ターミナルを開き直して `pipx list` を確認。 |
 | FFmpeg／ffprobe が見つからない | 両方をインストールし、配置したフォルダーを PATH に追加。 |
+| チャンネルプラスの API ホストを解決できない | テスト時に上流 API の DNS 解決が失敗しました。Cookie では直らないため、サービスの状態と yt-dlp の更新を確認してください。 |
+| Bilibili が HTTP 412 を返す | サイトがリクエストを拒否しています。公開テストではブラウザーヘッダーとブラウザー偽装でも解決しませんでした。アカウントや IP によって結果が異なる場合があります。 |
 | YouTube で Deno が必要と表示される | Deno 2.3.0 以降を PATH に追加し、ターミナルを開き直す。 |
 | YouTube がログインや PO token を要求する | yt-dlp を更新し、アカウントが必要な場合のみ Cookie を使用。一部の形式には外部の [PO token プロバイダー](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) が必要です。この CLI はプロバイダーの設定や token の指定に対応しないため、取得できない場合があります。 |
 | Bilibili の画質が指定より低い | 画質はログイン・会員資格・地域・動画によります。`--quality` は上限であり、形式を解放するものではありません。 |
