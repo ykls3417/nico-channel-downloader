@@ -156,11 +156,11 @@ class ParameterIntegrationTests(unittest.TestCase):
         for height in (480, 720, 1080, 1440):
             target = cls.root / str(height)
             target.mkdir()
-            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', f'testsrc2=size=256x{height}:rate=2',
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', f'testsrc2=size={height * 2}x{height}:rate=2',
                             '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '1', '-c:v', 'libx264',
                             '-preset', 'ultrafast', '-c:a', 'aac', '-f', 'hls', '-hls_list_size', '0',
                             str(target / 'video.m3u8')], check=True)
-            master.extend([f'#EXT-X-STREAM-INF:BANDWIDTH={height * 1000},RESOLUTION=256x{height}',
+            master.extend([f'#EXT-X-STREAM-INF:BANDWIDTH={height * 1000},RESOLUTION={height * 2}x{height}',
                            f'{height}/video.m3u8'])
         (cls.root / 'master.m3u8').write_text('\n'.join(master) + '\n', encoding='utf-8')
         cls.server = ThreadingHTTPServer(('127.0.0.1', 0), partial(ProtectedHandler, directory=str(cls.root)))

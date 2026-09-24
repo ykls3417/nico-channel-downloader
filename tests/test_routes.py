@@ -16,6 +16,13 @@ from yt_dlp.utils import DownloadError
 
 
 ROUTES = {
+    'https://www.youtube.com/watch?v=BaW_jenozKc&list=PL123': 'Youtube',
+    'https://youtube.com/shorts/BaW_jenozKc': 'Youtube',
+    'https://m.youtube.com/live/BaW_jenozKc': 'Youtube',
+    'https://youtu.be/BaW_jenozKc?si=tracking': 'Youtube',
+    'https://www.youtube.com/embed/BaW_jenozKc': 'Youtube',
+    'https://www.bilibili.com/video/BV1xx411c7mD': 'BiliBili',
+    'https://m.bilibili.com/video/av1?p=2': 'BiliBili',
     'https://www.nicovideo.jp/watch/sm9': 'Niconico',
     'https://nicovideo.jp/watch/nm123': 'Niconico',
     'https://sp.nicovideo.jp/watch/so123': 'Niconico',
@@ -39,10 +46,54 @@ ROUTES = {
 
 
 class RouteTests(unittest.TestCase):
+    def test_new_urls_normalize_without_playlist_or_tracking_parameters(self):
+        self.assertEqual(page_url('https://youtu.be/BaW_jenozKc?list=PL123&t=30'),
+                         'https://www.youtube.com/watch?v=BaW_jenozKc')
+        self.assertEqual(page_url('https://m.bilibili.com/video/BV1xx411c7mD/?p=2&share_source=copy'),
+                         'https://www.bilibili.com/video/BV1xx411c7mD?p=2')
+        self.assertEqual(default_referer('https://www.youtube.com/watch?v=BaW_jenozKc'), 'https://www.youtube.com/')
+        self.assertEqual(default_referer('https://www.bilibili.com/video/av1'), 'https://www.bilibili.com/')
+
+    def test_youtube_requires_runtime_before_creating_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'not-created'
+            with patch('nico_dl.shutil.which', side_effect=lambda name: None if name == 'deno' else name), \
+                    patch('nico_dl.download') as download, redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(nico_dl.main(['https://youtu.be/BaW_jenozKc', '--output-dir', str(output)]), 1)
+            self.assertIn('Deno', errors.getvalue())
+            self.assertFalse(output.exists())
+            download.assert_not_called()
+
+    def test_quality_selection_uses_shorter_edge_with_real_yt_dlp(self):
+        for portrait in (False, True):
+            for quality in ('480', '720', '1080', 'best'):
+                with self.subTest(portrait=portrait, quality=quality):
+                    formats = []
+                    for edge in (480, 720, 1080, 1440):
+                        width, height = (edge, edge * 2) if portrait else (edge * 2, edge)
+                        formats.append({'format_id': str(edge), 'url': f'https://media.example/{edge}.mp4',
+                                        'width': width, 'height': height, 'vcodec': 'h264', 'acodec': 'aac'})
+                    selection = 'bv*+ba/b' if quality == 'best' else f'bv*[short_edge<=?{quality}]+ba/b[short_edge<=?{quality}]'
+                    with nico_backend.RestrictedDL({'quiet': True, 'format': selection}) as downloader:
+                        result = downloader.process_video_result({'id': 'fixture', 'title': 'fixture', 'formats': formats}, download=False)
+                    self.assertEqual(result['format_id'], '1440' if quality == 'best' else quality)
+        for dimensions in ({}, {'width': 1920}, {'height': 1920}):
+            with nico_backend.RestrictedDL({'quiet': True, 'format': 'b[short_edge<=?480]'}) as downloader:
+                result = downloader.process_video_result({'id': 'unknown', 'title': 'unknown',
+                                                           'url': 'https://media.example/unknown.mp4',
+                                                           **dimensions}, download=False)
+            self.assertIsNone(result['short_edge'])
+
     def test_exact_hosts_and_rejected_inputs(self):
         for host in ALLOWED_HOSTS:
             self.assertEqual(http_url(f'https://{host}/'), f'https://{host}/')
-        bad = ['https://example.com/watch/sm9', 'https://nicovideo.jp.evil.test/watch/sm9',
+        bad = ['https://example.com/watch/sm9', 'https://youtube.com.evil.test/watch?v=BaW_jenozKc',
+               'https://youtube.com/watch?v=BaW_jenozKc&v=', 'https://youtube.com/playlist?list=PL123', 'https://youtube.com/@channel/live',
+               'https://youtu.be/BaW_jenozKc/other', 'https://youtube.com/watch?v=BaW_jenozKc&v=abcdefghijk',
+               'https://b23.tv/abc', 'https://live.bilibili.com/123', 'https://bilibili.tv/video/123',
+               'https://www.bilibili.com/video/BV1xx411c7mD?p=0',
+               'https://www.bilibili.com/video/BV1xx411c7mD?p=1&p=2',
+               'https://www.bilibili.com/video/BV1xx411c7mD?p=', 'https://nicovideo.jp.evil.test/watch/sm9',
                'https://evilnicovideo.jp/watch/sm9', 'https://foo.nicovideo.jp/watch/sm9',
                'https://nico.ms/sm9', 'http://localhost/video.m3u8', 'https://127.0.0.1/a',
                'https://nicovideo.jp:123/watch/sm9', 'https://nicovideo.jp:bad/watch/sm9',
@@ -60,7 +111,7 @@ class RouteTests(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             http_url('https://example.com/referer')
 
-    def test_each_route_selects_only_its_niconico_extractor(self):
+    def test_each_route_selects_only_its_registered_extractor(self):
         for url, expected in ROUTES.items():
             with self.subTest(url=url):
                 canonical = page_url(url)
@@ -73,7 +124,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(page_url('https://ch.nicovideo.jp/video'), 'https://ch.nicovideo.jp/video/video')
 
     def test_backend_rejects_external_playlist_entries_and_redirects(self):
-        with nico_backend.NiconicoDL({'quiet': True}) as downloader:
+        with nico_backend.RestrictedDL({'quiet': True}) as downloader:
             self.assertNotIn('Generic', downloader._ies)
             with self.assertRaises(DownloadError):
                 downloader.extract_info('https://example.com/video.mp4')
@@ -85,7 +136,7 @@ class RouteTests(unittest.TestCase):
         cases += [['--cookies-from-browser', b] for b in ('brave', 'chrome', 'chromium', 'edge', 'firefox', 'safari')]
         cases += [['--cookies', 'cookie file.txt'], ['--referer', 'https://nicovideo.jp/custom'],
                   ['--user-agent', 'Test browser/1.0']]
-        for url in ROUTES:
+        for url, extractor in ROUTES.items():
             for flags in cases:
                 with self.subTest(url=url, flags=flags), tempfile.TemporaryDirectory() as directory:
                     root = Path(directory).resolve()
@@ -93,11 +144,11 @@ class RouteTests(unittest.TestCase):
                     args = nico_dl.parser().parse_args([url, *flags])
                     def capture(command, stage, **kwargs):
                         self.assertEqual(command[2], 'nico_backend')
-                        self.assertIn('--yes-playlist', command)
+                        self.assertIn('--no-playlist' if extractor == 'Youtube' else '--yes-playlist', command)
                         self.assertIn('--abort-on-error', command)
                         self.assertEqual(command[-2:], ['--', page_url(url)])
                         self.assertEqual(command[command.index('--referer') + 1], args.referer or default_referer(args.url))
-                        expected = 'bv*+ba/b' if args.quality == 'best' else f'bv*[height<=?{args.quality}]+ba/b[height<=?{args.quality}]'
+                        expected = 'bv*+ba/b' if args.quality == 'best' else f'bv*[short_edge<=?{args.quality}]+ba/b[short_edge<=?{args.quality}]'
                         self.assertEqual(command[command.index('--format') + 1], expected)
                         if flags[0] in ('--cookies-from-browser', '--user-agent', '--referer'):
                             self.assertEqual(command[command.index(flags[0]) + 1], flags[1])
