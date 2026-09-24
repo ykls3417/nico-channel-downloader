@@ -1,4 +1,4 @@
-"""Download Niconico videos or collections and optionally process them with FFmpeg."""
+"""Download Niconico, YouTube, or Bilibili videos and optionally process them with FFmpeg."""
 
 import argparse
 import json
@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import urlsplit
+
 from nico_urls import default_referer, http_url, page_url
 
 
@@ -17,14 +19,14 @@ class DownloadError(Exception):
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("url", type=page_url, help="Niconico video, live, or collection page URL")
+    result.add_argument("url", type=page_url, help="Niconico page, YouTube video/Shorts/live, or Bilibili video URL")
     result.add_argument("--output-dir", type=Path, default=Path.home() / "Downloads" / "nico")
     result.add_argument("--quality", choices=["1080", "720", "480", "best"], default="1080",
-                        help="Maximum advertised height; default: 1080 (no upscaling)")
+                        help="Maximum advertised shorter edge; default: 1080 (no upscaling)")
     auth = result.add_mutually_exclusive_group()
     auth.add_argument("--cookies", type=Path, help="Netscape-format cookies file")
     auth.add_argument("--cookies-from-browser", choices=["brave", "chrome", "chromium", "edge", "firefox", "safari"])
-    result.add_argument("--referer", type=http_url, help="Niconico Referer override (default: selected service)")
+    result.add_argument("--referer", type=http_url, help="Allowed-site Referer override (default: selected service)")
     result.add_argument("--user-agent", help="Optional User-Agent matching your browser session")
     mode = result.add_mutually_exclusive_group()
     mode.add_argument("--clean", action="store_true", help="Remux into MKV, dropping copied metadata and chapters")
@@ -61,8 +63,9 @@ def download(args: argparse.Namespace, folder: Path) -> list[Path]:
     manifest = folder / "download-path.json"
     selection = "bv*+ba/b"
     if args.quality != "best":
-        selection = f"bv*[height<=?{args.quality}]+ba/b[height<=?{args.quality}]"
-    command = [sys.executable, "-m", "nico_backend", "--ignore-config", "--yes-playlist", "--abort-on-error",
+        selection = f"bv*[short_edge<=?{args.quality}]+ba/b[short_edge<=?{args.quality}]"
+    playlist = "--no-playlist" if urlsplit(args.url).hostname == 'www.youtube.com' else "--yes-playlist"
+    command = [sys.executable, "-m", "nico_backend", "--ignore-config", playlist, "--abort-on-error",
                "--abort-on-unavailable-fragments", "--retries", "5", "--fragment-retries", "5",
                "--socket-timeout", "30", "--no-overwrites", "--referer", args.referer or default_referer(args.url),
                "--format", selection, "--merge-output-format", "mkv",
@@ -127,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         for executable in ("ffmpeg", "ffprobe"):
             if not shutil.which(executable):
                 raise DownloadError(f"Install {executable} and make it available on PATH.")
+        if urlsplit(args.url).hostname == 'www.youtube.com' and not shutil.which('deno'):
+            raise DownloadError('YouTube requires Deno on PATH for JavaScript challenges. Install Deno, then retry.')
         if args.cookies and not args.cookies.expanduser().is_file():
             raise DownloadError("Cookies file does not exist.")
         root = args.output_dir.expanduser().resolve()

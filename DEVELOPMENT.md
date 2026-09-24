@@ -24,15 +24,21 @@ python tests/check_package.py dist
 
 Start with an empty `dist` directory so there is exactly one wheel to test. `build` creates a source archive, then builds the wheel from that archive. The package check installs the wheel into a temporary pipx environment, verifies the installed modules and both CLI entry points, and runs the complete test suite outside the checkout. It does not change your existing pipx apps.
 
-CI builds once and tests that wheel on Windows/macOS with Python 3.12, and Linux with Python 3.10, 3.12 and 3.13. FFmpeg must be present; CI does not silently skip media tests. Local HLS fixtures test actual downloads, four quality choices, cookies/headers, metadata cleanup, all 52 CRF values, output validation and preservation on errors. URL tests cover 19 route examples, all shared parameters, host restrictions and collection handling. Test-only local extractors are not included in the wheel.
+CI builds once and tests that wheel on Windows/macOS with Python 3.12, and Linux with Python 3.10, 3.12 and 3.13. FFmpeg must be present; CI does not silently skip media tests. Local HLS fixtures test actual downloads, four quality choices, cookies/headers, metadata cleanup, all 52 CRF values, output validation and preservation on errors. URL tests cover 26 route examples across Niconico, YouTube and Bilibili, all shared parameters, host restrictions and collection handling. Quality tests use real yt-dlp selection for both portrait and landscape formats, including unknown dimensions. YouTube runtime checks fail before creating output when Deno is missing. Test-only local extractors are not included in the wheel.
 
 These tests do not prove access to paid content, real browser encrypted cookie stores, live broadcasts, or timeshift playback. Public video extraction and traditional-channel pagination have also been checked manually without account credentials.
+
+## Architecture
+
+The three existing modules keep their roles: `nico_urls.py` validates and normalizes allowed page URLs, `nico_backend.py` registers only the supported yt-dlp extractors and supplies shorter-edge format metadata, and `nico_dl.py` handles the CLI, download manifest and FFmpeg processing. The `nico-dl` command and package name remain unchanged for existing users. No generic extractor or new service framework is needed.
+
+YouTube requires Deno 2.3.0+ on PATH for manual integration checks. A public YouTube video (`jNQXAC9IVRw`) passed extraction, download, H.264/AAC conversion and full decode validation during the 0.4.0 checks. Bilibili returned HTTP 412 from this environment, so its real download could not be verified. Automated fixtures do not prove current site availability, actual live recording or authenticated access.
 
 ## Publish a GitHub release
 
 1. Update `project.version` in `pyproject.toml` and the installation URLs in all three READMEs.
 2. Commit the change and wait for Tests to pass.
-3. Create a GitHub release with the matching tag, for example `v0.3.0`.
+3. Create a GitHub release with the matching tag, for example `v0.4.0`.
 4. The Release workflow checks the tag/version, builds distributions, and runs the five installation/media test jobs. Only after they pass does it attach the wheel, source archive and SHA256 checksums to the release.
 
 The release job can be rerun through Actions → Release → Run workflow. Enter the existing tag. It replaces that release's generated assets; do not move published version tags. PyPI refuses to replace an already-published distribution, so use a new version for package changes.
